@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gen-Tools QR Generator</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        neon: '#38bdf8', // Neon Blue
+                        navy: '#050b14', // Deep Navy
+                        glass: 'rgba(255, 255, 255, 0.03)',
+                        glassBorder: 'rgba(255, 255, 255, 0.1)'
+                    },
+                    boxShadow: {
+                        'neon': '0 0 20px rgba(56, 189, 248, 0.3)',
+                        'neon-strong': '0 0 30px rgba(56, 189, 248, 0.6)',
+                        'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #050b14;
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+
+        /* Ambient Background Glow */
+        .ambient-glow {
+            position: fixed;
+            top: -20vh;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80vw;
+            height: 80vh;
+            background: radial-gradient(circle, rgba(56,189,248,0.15) 0%, rgba(5,11,20,0) 70%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Glassmorphism Classes */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .glass-input {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            transition: all 0.3s ease;
+        }
+        
+        .glass-input:focus {
+            outline: none;
+            border-color: #38bdf8;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+            background: rgba(0, 0, 0, 0.4);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(56, 189, 248, 0.3); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(56, 189, 248, 0.6); }
+
+        /* Audio Visualizer Animation */
+        .visualizer-bar {
+            width: 3px;
+            background-color: #38bdf8;
+            border-radius: 3px;
+            animation: bounce 1s ease-in-out infinite;
+            box-shadow: 0 0 8px #38bdf8;
+            transform-origin: bottom;
+        }
+        .paused .visualizer-bar {
+            animation-play-state: paused;
+            height: 4px !important;
+        }
+        .visualizer-bar:nth-child(1) { animation-delay: 0.1s; height: 12px; }
+        .visualizer-bar:nth-child(2) { animation-delay: 0.3s; height: 20px; }
+        .visualizer-bar:nth-child(3) { animation-delay: 0.0s; height: 16px; }
+        .visualizer-bar:nth-child(4) { animation-delay: 0.2s; height: 10px; }
+
+        @keyframes bounce {
+            0%, 100% { transform: scaleY(0.5); }
+            50% { transform: scaleY(1.5); }
+        }
+
+        /* Toast Animation */
+        .toast {
+            transform: translateX(120%);
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        /* Fade in animation */
+        .fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        #qr-canvas img {
+            filter: drop-shadow(0 0 10px rgba(56,189,248,0.2));
+            transition: all 0.3s ease;
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 12px;
+        }
+        #qr-canvas:hover img {
+            filter: drop-shadow(0 0 20px rgba(56,189,248,0.4));
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans antialiased selection:bg-neon selection:text-navy">
+
+    <!-- Ambient Background -->
+    <div class="ambient-glow"></div>
+
+    <!-- Audio Element -->
+    <audio id="bg-audio" loop>
+        <source src="BacksoundT1.mp3" type="audio/mpeg">
+    </audio>
+
+    <!-- Navbar -->
+    <nav class="w-full glass-panel border-b-0 border-white/5 py-4 px-6 md:px-12 flex items-center justify-between z-20 sticky top-0">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-neon/10 border border-neon/30 flex items-center justify-center shadow-neon">
+                <i class="ph ph-qr-code text-neon text-2xl"></i>
+            </div>
+            <h1 class="text-xl font-bold tracking-wide text-white">Gen-Tools <span class="text-neon font-light">QR</span></h1>
+        </div>
+        
+        <!-- Audio Control Button -->
+        <button id="btn-audio" class="flex items-center gap-3 glass-panel px-4 py-2 rounded-full border-white/10 hover:border-neon/40 transition-all group paused">
+            <div class="flex items-end gap-1 h-5 overflow-hidden" id="visualizer-container">
+                <div class="visualizer-bar"></div>
+                <div class="visualizer-bar"></div>
+                <div class="visualizer-bar"></div>
+                <div class="visualizer-bar"></div>
+            </div>
+            <span class="text-xs font-medium text-slate-400 group-hover:text-neon transition-colors" id="audio-status">AUDIO OFF</span>
+            <i class="ph ph-speaker-hifi text-slate-400 group-hover:text-neon" id="audio-icon"></i>
+        </button>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 z-10 w-full max-w-6xl mx-auto">
+        
+        <!-- Main Card -->
+        <div class="glass-panel w-full rounded-3xl p-1 relative overflow-hidden fade-in">
+            <!-- Inner highlight border effect -->
+            <div class="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent opacity-50 pointer-events-none rounded-3xl"></div>
+            
+            <div class="bg-navy/80 rounded-[22px] p-6 sm:p-10 grid lg:grid-cols-12 gap-10 relative z-10">
+                
+                <!-- Left Column: Inputs -->
+                <div class="lg:col-span-7 flex flex-col space-y-8">
+                    <div>
+                        <h2 class="text-3xl sm:text-4xl font-bold text-white mb-2">Buat QR Code <span class="text-neon">Modern</span></h2>
+                        <p class="text-slate-400 text-sm sm:text-base">Ubah your URL stuff too QR code.(not a Q riss).</p>
+                    </div>
+
+                    <div class="space-y-5">
+                        <!-- Input Data -->
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2 flex items-center gap-2">
+                                <i class="ph ph-link text-neon"></i> Masukkan URL atau Teks
+                            </label>
+                            <textarea id="qr-data" rows="3" placeholder="https://contoh.com atau teks apa saja..." 
+                                class="w-full glass-input rounded-xl p-4 resize-none"></textarea>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-5">
+                            <!-- Information Box instead of dropdowns for API Mode -->
+                            <div class="col-span-2 glass-input rounded-xl p-4 flex items-center gap-4 bg-white/5">
+                                <div class="w-10 h-10 rounded-lg bg-neon/10 flex items-center justify-center">
+                                    <i class="ph ph-lightning text-neon text-xl"></i>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-bold text-white uppercase tracking-wider">API By QRcat</p>
+                                    <p class="text-[10px] text-slate-400">QR Code akan muncul dengan kecepatan internet anda.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button id="btn-generate" 
+                        class="w-full bg-neon text-navy font-bold py-4 px-6 rounded-xl hover:bg-sky-300 shadow-neon hover:shadow-neon-strong transition-all duration-300 flex items-center justify-center gap-2 text-lg transform hover:-translate-y-1 active:translate-y-0">
+                        <i class="ph-bold ph-magic-wand"></i> Generate QR Code
+                    </button>
+                </div>
+
+                <!-- Right Column: Result -->
+                <div class="lg:col-span-5 flex flex-col h-full">
+                    <div class="glass-input rounded-2xl p-6 flex flex-col items-center justify-center flex-1 min-h-[350px] relative group overflow-hidden bg-black/40">
+                        <!-- Decorative corners -->
+                        <div class="absolute top-4 left-4 w-4 h-4 border-t-2 border-l-2 border-neon/50 rounded-tl-sm"></div>
+                        <div class="absolute top-4 right-4 w-4 h-4 border-t-2 border-r-2 border-neon/50 rounded-tr-sm"></div>
+                        <div class="absolute bottom-4 left-4 w-4 h-4 border-b-2 border-l-2 border-neon/50 rounded-bl-sm"></div>
+                        <div class="absolute bottom-4 right-4 w-4 h-4 border-b-2 border-r-2 border-neon/50 rounded-br-sm"></div>
+                        
+                        <!-- QR Canvas Area -->
+                        <div id="qr-canvas" class="bg-transparent p-4 rounded-xl flex items-center justify-center w-[250px] h-[250px] transition-all">
+                            <!-- Placeholder -->
+                            <div class="text-center text-slate-500 flex flex-col items-center" id="qr-placeholder">
+                                <i class="ph ph-qr-code text-6xl mb-2 opacity-30"></i>
+                                <p class="text-sm">Preview QR Code</p>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div id="qr-actions" class="w-full flex gap-3 mt-8 opacity-0 pointer-events-none transition-all duration-500 translate-y-4">
+                            <button id="btn-download" class="flex-1 bg-white/10 hover:bg-white/20 border border-white/10 text-white py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-all hover:border-neon/50">
+                                <i class="ph ph-download-simple"></i> PNG
+                            </button>
+                            <button id="btn-copy" class="flex-1 bg-white/10 hover:bg-white/20 border border-white/10 text-white py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-all hover:border-neon/50">
+                                <i class="ph ph-copy"></i> Teks
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- History Section -->
+        <div class="w-full max-w-6xl mt-8 fade-in" style="animation-delay: 0.2s;">
+            <div class="flex items-center gap-2 mb-4 px-2">
+                <i class="ph ph-clock-counter-clockwise text-neon"></i>
+                <h3 class="text-lg font-medium text-white">Riwayat Terakhir</h3>
+            </div>
+            
+            <div id="history-list" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="col-span-full text-center py-8 glass-panel rounded-2xl text-slate-500 text-sm border-dashed border-white/10" id="empty-history">
+                    Belum ada QR code yang dibuat.
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="py-6 text-center text-sm text-slate-500 z-10">
+        &copy; 2026 Gen-Tools QR. Dirancang for your stuff.
+    </footer>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast fixed bottom-6 right-6 glass-panel border-l-4 border-l-neon bg-navy/90 text-white px-5 py-4 rounded-xl shadow-neon flex items-center gap-3 z-50 min-w-[280px]">
+        <div class="w-8 h-8 rounded-full bg-neon/20 flex items-center justify-center">
+            <i class="ph-bold ph-check text-neon"></i>
+        </div>
+        <div>
+            <h4 class="font-semibold text-sm" id="toast-title">Berhasil!</h4>
+            <p class="text-xs text-slate-400" id="toast-msg">QR Code siap digunakan.</p>
+        </div>
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Audio Elements
+            const audio = document.getElementById('bg-audio');
+            const btnAudio = document.getElementById('btn-audio');
+            const audioStatus = document.getElementById('audio-status');
+            const audioIcon = document.getElementById('audio-icon');
+            const visualizerContainer = document.getElementById('visualizer-container');
+
+            // UI Elements
+            const inputData = document.getElementById('qr-data');
+            const btnGenerate = document.getElementById('btn-generate');
+            const qrCanvasContainer = document.getElementById('qr-canvas');
+            const qrPlaceholder = document.getElementById('qr-placeholder');
+            const qrActions = document.getElementById('qr-actions');
+            const btnDownload = document.getElementById('btn-download');
+            const btnCopy = document.getElementById('btn-copy');
+            const historyList = document.getElementById('history-list');
+            const emptyHistory = document.getElementById('empty-history');
+            
+            // Toast Elements
+            const toast = document.getElementById('toast');
+            const toastTitle = document.getElementById('toast-title');
+            const toastMsg = document.getElementById('toast-msg');
+            let toastTimeout;
+
+            // QR State
+            let currentData = "";
+            let history = [];
+
+            // --- Audio Logic ---
+            const toggleAudio = () => {
+                if (audio.paused) {
+                    audio.play().catch(e => console.log("User interaction required for audio"));
+                    btnAudio.classList.remove('paused');
+                    audioStatus.textContent = "AUDIO ON";
+                    audioStatus.classList.add('text-neon');
+                    audioIcon.classList.add('ph-speaker-high');
+                    audioIcon.classList.remove('ph-speaker-hifi');
+                } else {
+                    audio.pause();
+                    btnAudio.classList.add('paused');
+                    audioStatus.textContent = "AUDIO OFF";
+                    audioStatus.classList.remove('text-neon');
+                    audioIcon.classList.remove('ph-speaker-high');
+                    audioIcon.classList.add('ph-speaker-hifi');
+                }
+            };
+
+            btnAudio.addEventListener('click', toggleAudio);
+
+            // --- QR Logic (API ONLY) ---
+            const showToast = (title, msg) => {
+                toastTitle.textContent = title;
+                toastMsg.textContent = msg;
+                toast.classList.add('show');
+                clearTimeout(toastTimeout);
+                toastTimeout = setTimeout(() => toast.classList.remove('show'), 3000);
+            };
+
+            const generateQR = () => {
+                const data = inputData.value.trim();
+
+                if (!data) {
+                    showToast('Oops!', 'Masukkan URL atau teks terlebih dahulu.');
+                    inputData.focus();
+                    return;
+                }
+
+                currentData = data;
+                qrPlaceholder.style.display = 'none';
+                qrCanvasContainer.innerHTML = '<div class="animate-pulse text-neon"><i class="ph ph-circle-notch animate-spin text-4xl"></i></div>';
+
+                // API Source
+                const apiUrl = `https://qrcodecat.com/api/qrcode?data=${encodeURIComponent(data)}&size=300`;
+                
+                const img = document.createElement('img');
+                img.src = apiUrl;
+                img.alt = "QR Code";
+                img.id = "api-qr-img";
+                img.className = "fade-in";
+                
+                img.onload = () => {
+                    qrCanvasContainer.innerHTML = '';
+                    qrCanvasContainer.appendChild(img);
+                    qrActions.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-4');
+                    qrActions.classList.add('opacity-100', 'translate-y-0');
+                    showToast('Sukses!', 'QR Code API berhasil dibuat.');
+                    addToHistory(data);
+                };
+
+                img.onerror = () => {
+                    qrCanvasContainer.innerHTML = '';
+                    qrPlaceholder.style.display = 'flex';
+                    showToast('Gagal', 'API tidak merespon. Coba lagi nanti.');
+                };
+            };
+
+            const renderHistory = () => {
+                if (history.length === 0) {
+                    emptyHistory.style.display = 'block';
+                    historyList.innerHTML = '';
+                    historyList.appendChild(emptyHistory);
+                    return;
+                }
+                emptyHistory.style.display = 'none';
+                historyList.innerHTML = '';
+                history.slice(0, 3).forEach((item) => {
+                    const card = document.createElement('div');
+                    card.className = 'glass-panel p-4 rounded-xl flex items-center justify-between group cursor-pointer hover:border-neon/30 transition-all';
+                    const shortText = item.text.length > 25 ? item.text.substring(0, 25) + '...' : item.text;
+                    card.innerHTML = `
+                        <div class="flex items-center gap-3 overflow-hidden">
+                            <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-neon/10 border border-neon/30">
+                                <i class="ph ph-qr-code text-neon"></i>
+                            </div>
+                            <div class="truncate">
+                                <p class="text-sm text-white truncate font-medium">${shortText}</p>
+                                <p class="text-xs text-slate-500">${item.time}</p>
+                            </div>
+                        </div>
+                        <button class="text-slate-400 hover:text-neon opacity-0 group-hover:opacity-100 transition-opacity p-2">
+                            <i class="ph ph-arrow-counter-clockwise text-lg"></i>
+                        </button>
+                    `;
+                    card.addEventListener('click', () => {
+                        inputData.value = item.text;
+                        generateQR();
+                    });
+                    historyList.appendChild(card);
+                });
+            };
+
+            const addToHistory = (text) => {
+                const now = new Date();
+                const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+                history.unshift({ text, time: timeStr });
+                if (history.length > 3) history.pop();
+                renderHistory();
+            };
+
+            btnGenerate.addEventListener('click', generateQR);
+            inputData.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    generateQR();
+                }
+            });
+
+            btnDownload.addEventListener('click', () => {
+                const img = document.getElementById('api-qr-img');
+                if (img) {
+                    // API Download using proxy or open in new tab for direct save
+                    const link = document.createElement('a');
+                    link.href = img.src;
+                    link.target = "_blank";
+                    link.download = 'gen-tools-qr.png';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    showToast('Mengunduh', 'Gambar dibuka di tab baru untuk disimpan.');
+                }
+            });
+
+            btnCopy.addEventListener('click', async () => {
+                if (currentData) {
+                    try {
+                        await navigator.clipboard.writeText(currentData);
+                        showToast('Tersalin!', 'Teks sumber QR disalin.');
+                        const originalHtml = btnCopy.innerHTML;
+                        btnCopy.innerHTML = '<i class="ph ph-check text-neon"></i> Tersalin';
+                        btnCopy.classList.add('border-neon', 'text-neon');
+                        setTimeout(() => {
+                            btnCopy.innerHTML = originalHtml;
+                            btnCopy.classList.remove('border-neon', 'text-neon');
+                        }, 2000);
+                    } catch (err) {
+                        showToast('Gagal', 'Tidak dapat menyalin teks.');
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+
